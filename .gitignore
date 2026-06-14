@@ -1,0 +1,21 @@
+# Logs
+Logs/
+ProjectLog/
+ToolLog/
+*.log
+
+# PowerShell/Windows temp and history files
+*.tmp
+*~
+thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Editors & IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.user
