@@ -17,7 +17,7 @@ function Search-String {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
-        [Alias('path')]
+        [Alias('FullName')]
         [string]$Path,
 
         [Parameter(Mandatory = $true, Position = 1)]
@@ -56,16 +56,8 @@ function Search-String {
         # Search within the resolved files
         foreach ($file in $files) {
             try {
-                # Use Select-String to find matching lines
-                $foundMatches = Select-String -Path $file.FullName -Pattern $Pattern -ErrorAction SilentlyContinue
-                foreach ($match in $foundMatches) {
-                    [PSCustomObject]@{
-                        Path       = $file.FullName
-                        LineNumber = $match.LineNumber
-                        Line       = $match.Line.Trim()
-                        Pattern    = $Pattern
-                    }
-                }
+                # Use Select-String to find matching lines and return MatchInfo objects directly
+                Select-String -Path $file.FullName -Pattern $Pattern -ErrorAction SilentlyContinue
             }
             catch {
                 Write-Warning "Could not search file: $($file.FullName). Details: $_"
@@ -74,6 +66,5 @@ function Search-String {
     }
 }
 
-# Export the function and its alias
-New-Alias -Name 'Sreach-String' -Value 'Search-String' -Description 'Alias supporting spelling typo variant Sreach-String'
-Export-ModuleMember -Function 'Search-String' -Alias 'Sreach-String'
+
+Export-ModuleMember -Function 'Search-String'

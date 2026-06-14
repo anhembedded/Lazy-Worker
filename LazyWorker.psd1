@@ -15,7 +15,8 @@ RootModule = 'LazyWorker.psm1'
 NestedModules = @(
     'Module\Search-String.psm1',
     'Module\Stop-ProcessWithDll.psm1',
-    'Module\Log.psm1'
+    'Module\Log.psm1',
+    'Module\Send-FileViaSSH.psm1'
 )
 
 # Version number of this module.
@@ -41,7 +42,7 @@ PowerShellVersion = '7.4'
 
 # Functions to export from this module, for best performance, do not use wildcards and do not withdraw them from the list.
 FunctionsToExport = 
-@('Search-String', 'Stop-ProcessWithDll', 'Write-Log')
+@('Search-String', 'Stop-ProcessWithDll', 'Write-Log', 'Send-FileViaSSH')
 
 # Cmdlets to export from this module
 CmdletsToExport = @()
@@ -50,6 +51,6 @@ CmdletsToExport = @()
 VariablesToExport = @()
 
 # Aliases to export from this module
-AliasesToExport = @('Sreach-String')
+AliasesToExport = @()
 
 }
