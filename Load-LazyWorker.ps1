@@ -28,7 +28,14 @@ if (Test-Path $envFolder) {
 # 2. Load the module
 $manifestPath = Join-Path $PSScriptRoot "LazyWorker.psd1"
 Write-Host "Loading LazyWorker module from $manifestPath..." -ForegroundColor Cyan
-Import-Module $manifestPath -Force
-Write-Host "Module loaded successfully!" -ForegroundColor Green
-Write-Host "Available Commands:" -ForegroundColor Cyan
-Get-Command -Module LazyWorker
+try {
+    Import-Module $manifestPath -Force -ErrorAction Stop
+    Write-Host "Module loaded successfully!" -ForegroundColor Green
+    Write-Host "Available Commands:" -ForegroundColor Cyan
+    Get-Command -Module LazyWorker
+}
+catch {
+    Write-Error "Failed to load LazyWorker module. Details: $_"
+}
+
+

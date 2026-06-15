@@ -1,5 +1,34 @@
+# Check for Posh-SSH dependency and prompt to install if missing
+if (-not (Get-Module -ListAvailable -Name Posh-SSH)) {
+    Write-Host "Warning: The required dependency 'Posh-SSH' is not installed." -ForegroundColor Yellow
+    $choice = Read-Host "Would you like to install 'Posh-SSH' now? (y/n)"
+    if ($choice -eq 'y' -or $choice -eq 'yes') {
+        Write-Host "Installing Posh-SSH..." -ForegroundColor Cyan
+        try {
+            if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+                Write-Host "Installing NuGet package provider..." -ForegroundColor Cyan
+                Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser | Out-Null
+            }
+            $repo = Get-PSRepository -Name "PSGallery" -ErrorAction SilentlyContinue
+            if ($repo -and $repo.InstallationPolicy -ne 'Trusted') {
+                Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
+            }
+            Install-Module -Name Posh-SSH -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+            Write-Host "Posh-SSH installed successfully!" -ForegroundColor Green
+        }
+        catch {
+            Write-Error "Failed to install Posh-SSH: $_"
+            Throw "Failed to import Send-FileViaSSH because dependency Posh-SSH could not be installed."
+        }
+    }
+    else {
+        Throw "Failed to import Send-FileViaSSH: dependency 'Posh-SSH' is not installed."
+    }
+}
+
 # Import dependency
 Import-Module Posh-SSH -ErrorAction Stop
+
 
 <#
 .SYNOPSIS
