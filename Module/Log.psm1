@@ -47,31 +47,39 @@ function Write-Log {
         $logLine = "$timestamp [$paddedLevel] $Message"
 
         if ($shouldWrite) {
-            # Fallback dynamic path if LogPath env is null or empty
+            $fallbackUsed = $false
             if ([string]::IsNullOrWhiteSpace($LogPath)) {
-                # $PSScriptRoot inside Module/Log.psm1 is C:\...\Lazy-Worker\Module
-                # Split-Path gets the parent C:\...\Lazy-Worker
                 $moduleRoot = Split-Path -Path $PSScriptRoot -Parent
                 $LogPath = Join-Path $moduleRoot "Logs"
+                $fallbackUsed = $true
             }
 
-            # Ensure directory exists
-            if (-not (Test-Path -Path $LogPath)) {
-                try {
-                    New-Item -ItemType Directory -Path $LogPath -Force | Out-Null
-                }
-                catch {
-                    Write-Warning "Could not create log directory: $LogPath. Details: $_"
-                }
-            }
-
-            $logFile = Join-Path $LogPath "LazyWorker.log"
-            # Write to log file
             try {
-                $logLine | Out-File -FilePath $logFile -Append -Encoding utf8
+                # Ensure directory exists
+                if (-not (Test-Path -Path $LogPath -ErrorAction Stop)) {
+                    New-Item -ItemType Directory -Path $LogPath -Force -ErrorAction Stop | Out-Null
+                }
+                $logFile = Join-Path $LogPath "LazyWorker.log" -ErrorAction Stop
+                $logLine | Out-File -FilePath $logFile -Append -Encoding utf8 -ErrorAction Stop
             }
             catch {
-                Write-Warning "Could not write to log file: $logFile. Details: $_"
+                if (-not $fallbackUsed) {
+                    $moduleRoot = Split-Path -Path $PSScriptRoot -Parent
+                    $fallbackLogPath = Join-Path $moduleRoot "Logs"
+                    try {
+                        if (-not (Test-Path -Path $fallbackLogPath)) {
+                            New-Item -ItemType Directory -Path $fallbackLogPath -Force | Out-Null
+                        }
+                        $logFile = Join-Path $fallbackLogPath "LazyWorker.log"
+                        $logLine | Out-File -FilePath $logFile -Append -Encoding utf8
+                    }
+                    catch {
+                        Write-Warning "Could not write to log file. Primary path ($LogPath) and fallback path ($fallbackLogPath) both failed. Details: $_"
+                    }
+                }
+                else {
+                    Write-Warning "Could not write to log file: $LogPath. Details: $_"
+                }
             }
         }
 
