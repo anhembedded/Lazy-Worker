@@ -21,7 +21,7 @@
 - Prioritize `$env:LogPath`. If null/empty/whitespace, fallback to root `Logs` folder: `Join-Path (Split-Path $PSScriptRoot -Parent) "Logs"`. Do not skip file logging when `$env:LogPath` is missing.
 
 ## 6. Dependencies
-- Check external module dependencies at sub-module top. Prompt to install if missing.
+- Check external module dependencies lazily inside the function/cmdlet definition (not at the root/top of the sub-module script) to avoid blocking the parent module import process. Prompt to install if missing.
 - Auto-install NuGet (if missing), trust `PSGallery`, and run: `Install-Module -Name <Name> -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop`.
 - Throw a terminating error if the installation is skipped or fails.
 

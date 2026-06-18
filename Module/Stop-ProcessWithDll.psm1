@@ -30,22 +30,44 @@ function Stop-ProcessWithDll {
     process {
         Write-Verbose "Scanning processes for DLL: $DllName"
         
-        $targetProcesses = Get-Process | Where-Object {
-            try {
-                # Check modules loaded by the process
-                $modules = $_.Modules
-                $found = $false
-                foreach ($mod in $modules) {
-                    if ($mod.ModuleName -like "*$DllName*" -or $mod.FileName -like "*$DllName*") {
-                        $found = $true
-                        break
+        $targetProcesses = @()
+        if ($IsLinux -or $IsMacOS) {
+            # On Linux/macOS, checking Process.Modules throws PlatformNotSupportedException.
+            # We use lsof (list open files) to find processes that have loaded the DLL.
+            if (Get-Command lsof -ErrorAction SilentlyContinue) {
+                $matchingPids = lsof -t $DllName 2>$null
+                if ($matchingPids) {
+                    $pids = $matchingPids | ForEach-Object { [int]$_ } | Sort-Object -Unique
+                    foreach ($pid in $pids) {
+                        if ($pid -ne $PID) {
+                            $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+                            if ($proc) {
+                                $targetProcesses += $proc
+                            }
+                        }
                     }
                 }
-                $found
+            } else {
+                Write-Warning "lsof utility is required to find processes holding DLLs/files on Linux/macOS but was not found."
             }
-            catch {
-                # Silently catch access denied/permission errors for system/restricted processes
-                $false
+        } else {
+            $targetProcesses = Get-Process | Where-Object {
+                try {
+                    # Check modules loaded by the process
+                    $modules = $_.Modules
+                    $found = $false
+                    foreach ($mod in $modules) {
+                        if ($mod.ModuleName -like "*$DllName*" -or $mod.FileName -like "*$DllName*") {
+                            $found = $true
+                            break
+                        }
+                    }
+                    $found
+                }
+                catch {
+                    # Silently catch access denied/permission errors for system/restricted processes
+                    $false
+                }
             }
         }
 

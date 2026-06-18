@@ -1,7 +1,7 @@
 {
-    "ProjectLogPath": "c:\\Users\\hoang\\Documents\\Lazy-Worker\\ProjectLog",
-    "ToolLogPath": "c:\\Users\\hoang\\Documents\\Lazy-Worker\\ToolLog",
-    "LogPath": "c:\\Users\\hoang\\Documents\\Lazy-Worker\\Logs",
+    "ProjectLogPath": "ProjectLog",
+    "ToolLogPath": "ToolLog",
+    "LogPath": "Logs",
     "WriteLogToFile": "false",
     "DefaultValue": {
         "ProjectName": "Tool"

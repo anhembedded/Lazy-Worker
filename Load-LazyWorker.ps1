@@ -12,6 +12,22 @@ if (Test-Path $envFolder) {
                     if ($null -ne $property.Value -and ($property.Value -is [string] -or $property.Value -is [System.ValueType])) {
                         $name = $property.Name
                         $val = [string]$property.Value
+                        
+                        # Resolve path values ending in 'Path'
+                        if ($name -like "*Path") {
+                            # Normalize directory separators
+                            if ($IsWindows) {
+                                $val = $val -replace '/', '\'
+                            } else {
+                                $val = $val -replace '\\', '/'
+                            }
+                            # Check if the path is already rooted (absolute)
+                            $isRooted = $val.StartsWith('/') -or $val.StartsWith('~') -or ($val -match '^[a-zA-Z]:')
+                            if (-not $isRooted) {
+                                $val = Join-Path $PSScriptRoot $val
+                            }
+                        }
+
                         [System.Environment]::SetEnvironmentVariable($name, $val, [System.EnvironmentVariableTarget]::Process)
                         Write-Host "    [ENV] $name = $val" -ForegroundColor DarkGreen
                     }
