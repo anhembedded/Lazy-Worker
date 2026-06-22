@@ -16,17 +16,23 @@
 function Search-String {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
-        [Alias('FullName')]
-        [string]$Path,
-
-        [Parameter(Mandatory = $true, Position = 1)]
+        [Parameter(Mandatory = $true, Position = 0)]
         [Alias('partern')]
         [string]$Pattern,
 
+        [Parameter(Mandatory = $false, Position = 1, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [Alias('FullName')]
+        [string]$Path = '.',
+
         [Parameter()]
         [Alias('recusive')]
-        [switch]$Recursive
+        [switch]$Recursive,
+
+        [Parameter()]
+        [switch]$CaseSensitive,
+
+        [Parameter()]
+        [switch]$WholeWord
     )
 
     process {
@@ -53,11 +59,25 @@ function Search-String {
             $files = Get-Item -Path $resolvedPath
         }
 
+        # Prepare search pattern if WholeWord is requested
+        $searchPattern = $Pattern
+        if ($WholeWord) {
+            $searchPattern = "\b(?:$Pattern)\b"
+        }
+
         # Search within the resolved files
         foreach ($file in $files) {
             try {
+                $ssParams = @{
+                    Path        = $file.FullName
+                    Pattern     = $searchPattern
+                    ErrorAction = 'SilentlyContinue'
+                }
+                if ($CaseSensitive) {
+                    $ssParams.CaseSensitive = $true
+                }
                 # Use Select-String to find matching lines and return MatchInfo objects directly
-                Select-String -Path $file.FullName -Pattern $Pattern -ErrorAction SilentlyContinue
+                Select-String @ssParams
             }
             catch {
                 Write-Warning "Could not search file: $($file.FullName). Details: $_"
