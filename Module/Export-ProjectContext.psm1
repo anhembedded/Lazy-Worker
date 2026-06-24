@@ -142,6 +142,32 @@ function Export-ProjectContext {
             return $compressedText
         }
 
+        # ── Helper: strip comments from source code ───────────────────────
+        # Supported languages: python (.py), c (.c/.h), c++ (.cpp/.hpp)
+        function Remove-Comments {
+            param(
+                [string]$Text,
+                [string]$Language   # 'python' | 'c' | 'cpp'
+            )
+
+            if ($Language -eq 'python') {
+                # 1. Remove triple-quoted docstrings/block comments ("""...""" and '''...''')
+                #    Use singleline mode so . matches newlines
+                $Text = [regex]::Replace($Text, '(?s)(""".*?"""|\x27\x27\x27.*?\x27\x27\x27)', '')
+                # 2. Remove single-line # comments (not inside strings — best-effort)
+                #    Handles optional leading whitespace; preserves the newline
+                $Text = [regex]::Replace($Text, '(?m)[ \t]*#[^\r\n]*', '')
+            }
+            elseif ($Language -eq 'c' -or $Language -eq 'cpp') {
+                # 1. Remove block comments /* ... */ (singleline mode)
+                $Text = [regex]::Replace($Text, '(?s)/\*.*?\*/', '')
+                # 2. Remove single-line // comments; preserves the newline
+                $Text = [regex]::Replace($Text, '(?m)[ \t]*//[^\r\n]*', '')
+            }
+
+            return $Text
+        }
+
         # ── Helper: build ASCII tree string ──────────────────────────────
         function Build-TreeString {
             param(
@@ -361,6 +387,13 @@ function Export-ProjectContext {
 
             try {
                 $rawContent = [System.IO.File]::ReadAllText($file.FullName)
+
+                # Strip comments for Python / C / C++ before compressing
+                $commentLangs = @('python', 'c', 'cpp')
+                if ($commentLangs -contains $lang) {
+                    $rawContent = Remove-Comments -Text $rawContent -Language $lang
+                }
+
                 $compressedContent = Compress-EmptyLines -Text $rawContent
 
                 # Markdown header + fenced code block
