@@ -19,7 +19,11 @@
 .PARAMETER OutputPath
     The full path of the output text file to create.
 .PARAMETER Pattern
-    Glob pattern for file extensions to include. Default is "*.py".
+    One or more glob patterns for file extensions to include, separated by pipes.
+    Accepts pipe values, e.g. -Pattern "*.py | *.js"
+.PARAMETER ExcludePattern
+    One or more glob patterns for files to exclude from the output.
+    e.g. -ExcludePattern "*test*" "*.spec.*"
 .PARAMETER Recurse
     Process subdirectories recursively.
 .PARAMETER PrintToTerminal
@@ -28,6 +32,10 @@
     Export-ProjectContext -Path "C:\Projects\MyApp" -OutputPath "C:\context.txt" -Recurse
 .EXAMPLE
     Export-ProjectContext -Path ./src -OutputPath ./context.md -Pattern "*.ps1" -Recurse -PrintToTerminal
+.EXAMPLE
+    Export-ProjectContext -Path . -Recurse -PrintToTerminal -Pattern "*.psm1 | *.ps1 | *.psd1"
+.EXAMPLE
+    Export-ProjectContext -Path . -Recurse -Pattern "*.py" -ExcludePattern "*test* | *__init__*"
 #>
 function Export-ProjectContext {
     [CmdletBinding()]
@@ -36,13 +44,16 @@ function Export-ProjectContext {
         [ValidateNotNullOrEmpty()]
         [string]$Path,
 
-        [Parameter(Mandatory = $true, Position = 1)]
+        [Parameter(Position = 1)]
         [ValidateNotNullOrEmpty()]
         [string]$OutputPath,
 
         [Parameter(Position = 2)]
         [ValidateNotNullOrEmpty()]
         [string]$Pattern = '*.py',
+
+        [Parameter()]
+        [string]$ExcludePattern,
 
         [Parameter()]
         [switch]$Recurse,
@@ -199,6 +210,14 @@ function Export-ProjectContext {
     }
 
     process {
+        # ── Validate: at least one output destination ─────────────────────
+        $hasOutputFile = -not [string]::IsNullOrWhiteSpace($OutputPath)
+        if (-not $hasOutputFile -and -not $PrintToTerminal) {
+            $errMsg = 'You must specify -OutputPath, -PrintToTerminal, or both.'
+            Write-Log -Message $errMsg -Level Error
+            throw [System.ArgumentException]::new($errMsg)
+        }
+
         # ── Validate root path ───────────────────────────────────────────
         if (-not (Test-Path -Path $Path -PathType Container)) {
             $errMsg = "The path '$Path' does not exist or is not a directory."
@@ -209,33 +228,57 @@ function Export-ProjectContext {
         $resolvedRoot = (Resolve-Path -Path $Path -ErrorAction Stop).Path
 
         # ── Validate output directory exists ─────────────────────────────
-        $outputDir = Split-Path -Path $OutputPath -Parent
-        if (-not [string]::IsNullOrWhiteSpace($outputDir) -and -not (Test-Path -Path $outputDir -PathType Container)) {
-            try {
-                New-Item -ItemType Directory -Path $outputDir -Force -ErrorAction Stop | Out-Null
-                Write-Log -Message "Created output directory: $outputDir" -Level Info
+        if ($hasOutputFile) {
+            $outputDir = Split-Path -Path $OutputPath -Parent
+            if (-not [string]::IsNullOrWhiteSpace($outputDir) -and -not (Test-Path -Path $outputDir -PathType Container)) {
+                try {
+                    New-Item -ItemType Directory -Path $outputDir -Force -ErrorAction Stop | Out-Null
+                    Write-Log -Message "Created output directory: $outputDir" -Level Info
+                }
+                catch {
+                    $errMsg = "Failed to create output directory '$outputDir': $_"
+                    Write-Log -Message $errMsg -Level Error
+                    throw
+                }
             }
-            catch {
-                $errMsg = "Failed to create output directory '$outputDir': $_"
-                Write-Log -Message $errMsg -Level Error
-                throw
+        }
+
+        # ── Parse pipe-separated patterns ───────────────────────────────
+        $parsedPatterns = @($Pattern -split '\|' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        $parsedExcludes = @()
+        if (-not [string]::IsNullOrWhiteSpace($ExcludePattern)) {
+            $parsedExcludes = @($ExcludePattern -split '\|' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        }
+
+        # ── Auto-correct common regex-style pattern mistakes ────────────
+        # Users often type ".*psm1" (regex) instead of "*.psm1" (glob)
+        for ($pi = 0; $pi -lt $parsedPatterns.Count; $pi++) {
+            if ($parsedPatterns[$pi] -match '^\.\*' -and $parsedPatterns[$pi] -notmatch '^\*\.') {
+                $correctedPattern = $parsedPatterns[$pi] -replace '^\.\*', '*.'
+                Write-Log -Message "Auto-corrected pattern '$($parsedPatterns[$pi])' -> '$correctedPattern' (use glob syntax, e.g. '*.psm1' not '.*psm1')." -Level Warning
+                $parsedPatterns[$pi] = $correctedPattern
             }
         }
 
         # ── Collect files ────────────────────────────────────────────────
-        Write-Log -Message "Scanning '$resolvedRoot' for '$Pattern' files (Recurse=$Recurse)..." -Level Info
+        $patternDisplay = $parsedPatterns -join ', '
+        Write-Log -Message "Scanning '$resolvedRoot' for '$patternDisplay' files (Recurse=$Recurse)..." -Level Info
 
-        $gciParams = @{
-            Path    = $resolvedRoot
-            Filter  = $Pattern
-            File    = $true
-            ErrorAction = 'SilentlyContinue'
+        $allFiles = @()
+        foreach ($pat in $parsedPatterns) {
+            $gciParams = @{
+                Path        = $resolvedRoot
+                Filter      = $pat
+                File        = $true
+                ErrorAction = 'SilentlyContinue'
+            }
+            if ($Recurse) {
+                $gciParams.Recurse = $true
+            }
+            $allFiles += @(Get-ChildItem @gciParams)
         }
-        if ($Recurse) {
-            $gciParams.Recurse = $true
-        }
-
-        $allFiles = @(Get-ChildItem @gciParams)
+        # Remove duplicates (if patterns overlap)
+        $allFiles = @($allFiles | Sort-Object FullName -Unique)
 
         # ── Filter out excluded directories ──────────────────────────────
         $filteredFiles = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
@@ -246,6 +289,15 @@ function Export-ProjectContext {
                 if ($excludedDirs -contains $part) {
                     $skip = $true
                     break
+                }
+            }
+            # Apply ExcludePattern filtering
+            if (-not $skip -and $parsedExcludes) {
+                foreach ($exPat in $parsedExcludes) {
+                    if ($file.Name -like $exPat) {
+                        $skip = $true
+                        break
+                    }
                 }
             }
             if (-not $skip) {
@@ -267,7 +319,7 @@ function Export-ProjectContext {
         [void]$sb.AppendLine('# PROJECT CONTEXT')
         [void]$sb.AppendLine()
         [void]$sb.AppendLine("**Root:** ``$resolvedRoot``")
-        [void]$sb.AppendLine("**Pattern:** ``$Pattern``")
+        [void]$sb.AppendLine("**Pattern:** ``$patternDisplay``")
         [void]$sb.AppendLine("**Files:** $($filteredFiles.Count)")
         [void]$sb.AppendLine("**Generated:** $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
         [void]$sb.AppendLine()
@@ -337,25 +389,38 @@ function Export-ProjectContext {
             }
         }
 
-        # ── Write output file ────────────────────────────────────────────
-        try {
-            [System.IO.File]::WriteAllText($OutputPath, $sb.ToString(), [System.Text.Encoding]::UTF8)
-            Write-Log -Message "Context exported to '$OutputPath' ($processedCount files, $skippedBinary binary skipped)." -Level Info
-        }
-        catch {
-            $errMsg = "Failed to write output file '$OutputPath': $_"
-            Write-Log -Message $errMsg -Level Error
-            throw
+        # ── Write output file (only if OutputPath was provided) ────────────
+        if ($hasOutputFile) {
+            try {
+                [System.IO.File]::WriteAllText($OutputPath, $sb.ToString(), [System.Text.Encoding]::UTF8)
+                Write-Log -Message "Context exported to '$OutputPath' ($processedCount files, $skippedBinary binary skipped)." -Level Info
+            }
+            catch {
+                $errMsg = "Failed to write output file '$OutputPath': $_"
+                Write-Log -Message $errMsg -Level Error
+                throw
+            }
         }
 
+        # ── Print full content to terminal (when no file output) ─────────
+        if ($PrintToTerminal -and -not $hasOutputFile) {
+            Write-Host $sb.ToString()
+        }
+
+        # ── Summary ──────────────────────────────────────────────────────
         if ($PrintToTerminal) {
             Write-Host ''
             Write-Host "── Summary ──────────────────────────────────────" -ForegroundColor Cyan
             Write-Host "  Files processed : $processedCount" -ForegroundColor Gray
             Write-Host "  Binary skipped  : $skippedBinary" -ForegroundColor Gray
-            Write-Host "  Output          : $OutputPath" -ForegroundColor Gray
-            $fileSizeKB = [Math]::Round((Get-Item $OutputPath).Length / 1KB, 1)
-            Write-Host "  Size            : ${fileSizeKB} KB" -ForegroundColor Gray
+            if ($hasOutputFile) {
+                Write-Host "  Output          : $OutputPath" -ForegroundColor Gray
+                $fileSizeKB = [Math]::Round((Get-Item $OutputPath).Length / 1KB, 1)
+                Write-Host "  Size            : ${fileSizeKB} KB" -ForegroundColor Gray
+            }
+            else {
+                Write-Host "  Output          : (terminal only)" -ForegroundColor DarkGray
+            }
             Write-Host "─────────────────────────────────────────────────" -ForegroundColor Cyan
         }
     }
