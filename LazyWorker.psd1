@@ -18,7 +18,8 @@ NestedModules = @(
     'Module\Log.psm1',
     'Module\Send-FileViaSSH.psm1',
     'Module\Get-AllFontName.psm1',
-    'Module\LinuxCmd\Get-OomKillerHistory.psm1'
+    'Module\LinuxCmd\Get-OomKillerHistory.psm1',
+    'Module\Export-ProjectContext.psm1'
 )
 
 # Version number of this module.
@@ -44,7 +45,7 @@ PowerShellVersion = '7.4'
 
 # Functions to export from this module, for best performance, do not use wildcards and do not withdraw them from the list.
 FunctionsToExport = 
-@('Search-String', 'Stop-ProcessWithDll', 'Write-Log', 'Send-FileViaSSH', 'Get-AllFontName', 'Get-OomKillerHistory')
+@('Search-String', 'Stop-ProcessWithDll', 'Write-Log', 'Send-FileViaSSH', 'Get-AllFontName', 'Get-OomKillerHistory', 'Export-ProjectContext')
 
 # Cmdlets to export from this module
 CmdletsToExport = @()
