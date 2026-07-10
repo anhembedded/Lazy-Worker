@@ -2,13 +2,10 @@ name: Pester Tests
 
 on:
   pull_request:
-    paths:
-      - '**.ps1'
-      - '**.psm1'
-      - 'tests/**'
-      - '.agents/rules/**'
-      - 'Module/**'
-      - 'Environment/**'
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   test:
