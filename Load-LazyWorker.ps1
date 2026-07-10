@@ -18,27 +18,40 @@ if (Test-Path $envFolder) {
             if ($config) {
                 Write-Host "  📄 File: $($file.Name)" -ForegroundColor Gray
                 foreach ($property in $config.PSObject.Properties) {
-                    if ($null -ne $property.Value -and ($property.Value -is [string] -or $property.Value -is [System.ValueType])) {
-                        $name = $property.Name
-                        $val = [string]$property.Value
-                        
+                    $name = $property.Name
+                    $rawVal = $property.Value
+                    if ($null -ne $rawVal -and ($rawVal -is [string] -or $rawVal -is [System.ValueType])) {
+                        # Use a string form for environment variables
+                        $envVal = [string]$rawVal
+
                         # Resolve path values ending in 'Path'
-                        if ($name -like "*Path") {
+                        if ($name -like "*Path" -and $envVal) {
                             # Normalize directory separators
                             if ($IsWindows) {
-                                $val = $val -replace '/', '\'
+                                $envVal = $envVal -replace '/', '\\'
                             } else {
-                                $val = $val -replace '\\', '/'
+                                $envVal = $envVal -replace '\\', '/'
                             }
                             # Check if the path is already rooted (absolute)
-                            $isRooted = $val.StartsWith('/') -or $val.StartsWith('~') -or ($val -match '^[a-zA-Z]:')
+                            $isRooted = $envVal.StartsWith('/') -or $envVal.StartsWith('~') -or ($envVal -match '^[a-zA-Z]:')
                             if (-not $isRooted) {
-                                $val = Join-Path $PSScriptRoot $val
+                                $envVal = Join-Path $PSScriptRoot $envVal
                             }
                         }
 
-                        [System.Environment]::SetEnvironmentVariable($name, $val, [System.EnvironmentVariableTarget]::Process)
-                        Write-Host "    ✨ [ENV] $name = $val" -ForegroundColor DarkGreen
+                        # Set process environment variable (string)
+                        [System.Environment]::SetEnvironmentVariable($name, $envVal, [System.EnvironmentVariableTarget]::Process)
+
+                        # Also create a PowerShell variable so users can access e.g. $MyName
+                        # Preserve typed value when possible; for strings use the normalized envVal
+                        if ($rawVal -isnot [string]) {
+                            $psValue = $rawVal
+                        } else {
+                            $psValue = $envVal
+                        }
+                        Set-Variable -Name $name -Value $psValue -Scope Global -Force
+
+                        Write-Host "    ✨ [ENV] $name = $envVal" -ForegroundColor DarkGreen
                     }
                 }
             }
