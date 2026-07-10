@@ -29,3 +29,9 @@ trigger: always_on
 - Auto-install NuGet (if missing), trust `PSGallery`, and run: `Install-Module -Name <Name> -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop`.
 - Throw a terminating error if the installation is skipped or fails.
 
+## 7. Testing
+- Create Pester tests under a top-level `tests/` directory. Use descriptive filenames matching the module or function, e.g., `tests/Write-Log.Tests.ps1`.
+- Tests should verify module exports, function behavior, and important fallbacks (e.g., LogPath fallback).
+- Prefer idempotent tests: create and clean up any temporary files or folders used during testing.
+- CI pipelines should run `Invoke-Pester -Path tests -PassThru` and fail the build on test failures.
+
