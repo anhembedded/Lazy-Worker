@@ -291,6 +291,9 @@ function Export-ProjectContext {
 
         # ── Validate output directory exists ─────────────────────────────
         if ($hasOutputFile) {
+            if ($OutputPath.EndsWith('/') -or $OutputPath.EndsWith('\') -or (Test-Path -Path $OutputPath -PathType Container)) {
+                $OutputPath = Join-Path $OutputPath 'context.md'
+            }
             $outputDir = Split-Path -Path $OutputPath -Parent
             if (-not [string]::IsNullOrWhiteSpace($outputDir) -and -not (Test-Path -Path $outputDir -PathType Container)) {
                 try {

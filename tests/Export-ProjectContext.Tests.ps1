@@ -109,4 +109,39 @@ Describe 'Export-ProjectContext - multiple paths' {
         if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
         if (Test-Path $out) { Remove-Item -Force $out }
     }
+
+    It 'Handles OutputPath pointing to a directory (with trailing slash or existing folder)' {
+        $root = Join-Path $PSScriptRoot '..' | Resolve-Path | Select-Object -ExpandProperty Path
+        $tmp = Join-Path $root 'tests_dirpath_tmp'
+        if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
+        New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+        Set-Content -Path (Join-Path $tmp 'test.ps1') -Value "Write-Host 'Hello'" -Force
+
+        # Case 1: Trailing slash (directory does not exist yet)
+        $outDir1 = Join-Path $root 'tests_out_dir1/'
+        if (Test-Path $outDir1) { Remove-Item -Recurse -Force $outDir1 }
+        
+        Import-Module -Force -Name "$PSScriptRoot/../LazyWorker.psd1" -ErrorAction Stop
+        Export-ProjectContext -Path $tmp -OutputPath $outDir1 -Pattern '*.ps1' -Recurse
+
+        $expectedFile1 = Join-Path $outDir1 'context.md'
+        Test-Path $expectedFile1 | Should -BeTrue
+        (Get-Content -Path $expectedFile1 -Raw) | Should -Match 'test.ps1'
+
+        # Case 2: Existing directory path without trailing slash
+        $outDir2 = Join-Path $root 'tests_out_dir2'
+        if (Test-Path $outDir2) { Remove-Item -Recurse -Force $outDir2 }
+        New-Item -ItemType Directory -Path $outDir2 -Force | Out-Null
+
+        Export-ProjectContext -Path $tmp -OutputPath $outDir2 -Pattern '*.ps1' -Recurse
+
+        $expectedFile2 = Join-Path $outDir2 'context.md'
+        Test-Path $expectedFile2 | Should -BeTrue
+        (Get-Content -Path $expectedFile2 -Raw) | Should -Match 'test.ps1'
+
+        # cleanup
+        if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
+        if (Test-Path $outDir1) { Remove-Item -Recurse -Force $outDir1 }
+        if (Test-Path $outDir2) { Remove-Item -Recurse -Force $outDir2 }
+    }
 }
