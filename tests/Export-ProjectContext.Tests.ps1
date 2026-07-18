@@ -82,4 +82,31 @@ Describe 'Export-ProjectContext - multiple paths' {
         if (Test-Path $homeTmp) { Remove-Item -Recurse -Force $homeTmp }
         if (Test-Path $out) { Remove-Item -Force $out }
     }
+
+    It 'Only exports directory tree and metadata, skipping source code contents when -Tree is specified' {
+        $root = Join-Path $PSScriptRoot '..' | Resolve-Path | Select-Object -ExpandProperty Path
+        $tmp = Join-Path $root 'tests_tree_tmp'
+        if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
+        New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+        Set-Content -Path (Join-Path $tmp 'test1.ps1') -Value "Write-Host 'Test 1 Content'" -Force
+        Set-Content -Path (Join-Path $tmp 'test2.ps1') -Value "Write-Host 'Test 2 Content'" -Force
+
+        $out = Join-Path $root 'tests_tmp_tree_output.md'
+        if (Test-Path $out) { Remove-Item $out -Force }
+
+        Import-Module -Force -Name "$PSScriptRoot/../LazyWorker.psd1" -ErrorAction Stop
+        Export-ProjectContext -Path $tmp -OutputPath $out -Pattern '*.ps1' -Recurse -Tree
+
+        Test-Path $out | Should -BeTrue
+        $content = Get-Content -Path $out -Raw
+        $content | Should -Match 'test1.ps1'
+        $content | Should -Match 'test2.ps1'
+        $content | Should -Not -Match 'Test 1 Content'
+        $content | Should -Not -Match 'Test 2 Content'
+        $content | Should -Not -Match 'FILE: test1.ps1'
+
+        # cleanup
+        if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
+        if (Test-Path $out) { Remove-Item -Force $out }
+    }
 }

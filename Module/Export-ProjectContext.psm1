@@ -28,6 +28,8 @@
     Process subdirectories recursively.
 .PARAMETER PrintToTerminal
     Stream output to the host console as it is written.
+.PARAMETER Tree
+    Only output the directory tree structure without appending the source code contents.
 .EXAMPLE
     Export-ProjectContext -Path "C:\Projects\MyApp" -OutputPath "C:\context.txt" -Recurse
 .EXAMPLE
@@ -59,7 +61,10 @@ function Export-ProjectContext {
         [switch]$Recurse,
 
         [Parameter()]
-        [switch]$PrintToTerminal
+        [switch]$PrintToTerminal,
+
+        [Parameter()]
+        [switch]$Tree
     )
 
     begin {
@@ -405,10 +410,14 @@ function Export-ProjectContext {
             [void]$sb.AppendLine($treeString)
             [void]$sb.AppendLine('```')
             [void]$sb.AppendLine()
-            [void]$sb.AppendLine('---')
-            [void]$sb.AppendLine()
+
+            if (-not $Tree) {
+                [void]$sb.AppendLine('---')
+                [void]$sb.AppendLine()
+            }
 
             foreach ($file in ($filteredFiles | Sort-Object FullName)) {
+                if ($Tree) { break }
                 $relativePath = $file.FullName.Substring($resolvedRoot.Length).TrimStart([IO.Path]::DirectorySeparatorChar, '/', '\')
 
                 # Skip binary files
