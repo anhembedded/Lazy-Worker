@@ -50,10 +50,10 @@ function Export-ProjectContext {
 
         [Parameter(Position = 2)]
         [ValidateNotNullOrEmpty()]
-        [string]$Pattern = '*.py',
+        [string[]]$Pattern = @('*.py'),
 
         [Parameter()]
-        [string]$ExcludePattern,
+        [string[]]$ExcludePattern,
 
         [Parameter()]
         [switch]$Recurse,
@@ -113,6 +113,26 @@ function Export-ProjectContext {
             '.kt'    = 'kotlin'
             '.swift' = 'swift'
             '.dart'  = 'dart'
+        }
+
+        # ── Helper: parse and split patterns ──────────────────────────────
+        function Parse-Patterns {
+            param([string[]]$InputPatterns)
+            if ($null -eq $InputPatterns) { return @() }
+            
+            $results = [System.Collections.Generic.List[string]]::new()
+            foreach ($item in $InputPatterns) {
+                if ([string]::IsNullOrWhiteSpace($item)) { continue }
+                # Split by space, comma, semicolon, pipe, ampersand, or double-ampersand
+                $parts = [regex]::Split($item, '[\s,;|&]+')
+                foreach ($part in $parts) {
+                    $trimmed = $part.Trim()
+                    if (-not [string]::IsNullOrEmpty($trimmed)) {
+                        $results.Add($trimmed)
+                    }
+                }
+            }
+            return $results.ToArray()
         }
 
         # ── Helper: detect binary content ────────────────────────────────
@@ -269,20 +289,40 @@ function Export-ProjectContext {
             }
         }
 
-        # ── Parse pipe-separated patterns ───────────────────────────────
-        $parsedPatterns = @($Pattern -split '\|' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-        $parsedExcludes = @()
-        if (-not [string]::IsNullOrWhiteSpace($ExcludePattern)) {
-            $parsedExcludes = @($ExcludePattern -split '\|' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        # ── Parse patterns and excludes ──────────────────────────────────
+        $parsedPatterns = @(Parse-Patterns -InputPatterns $Pattern)
+        $parsedExcludes = @(Parse-Patterns -InputPatterns $ExcludePattern)
+
+        # ── Auto-correct common regex-style & missing wildcard mistakes ──
+        for ($pi = 0; $pi -lt $parsedPatterns.Count; $pi++) {
+            $pat = $parsedPatterns[$pi]
+            
+            # Users often type ".*psm1" (regex) instead of "*.psm1" (glob)
+            if ([regex]::IsMatch($pat, '^\.\*') -and -not [regex]::IsMatch($pat, '^\*\.')) {
+                $correctedPattern = $pat -replace '^\.\*', '*.'
+                Write-Log -Message "Auto-corrected pattern '$pat' -> '$correctedPattern' (use glob syntax, e.g. '*.psm1' not '.*psm1')." -Level Warning
+                $parsedPatterns[$pi] = $correctedPattern
+            }
+            # Users often type ".ps1" or ".py" (extension only) instead of "*.ps1" or "*.py"
+            elseif ([regex]::IsMatch($pat, '^\.[a-zA-Z0-9_-]+$')) {
+                $correctedPattern = "*" + $pat
+                Write-Log -Message "Auto-corrected pattern '$pat' -> '$correctedPattern' (prepended * for glob matching)." -Level Warning
+                $parsedPatterns[$pi] = $correctedPattern
+            }
         }
 
-        # ── Auto-correct common regex-style pattern mistakes ────────────
-        # Users often type ".*psm1" (regex) instead of "*.psm1" (glob)
-        for ($pi = 0; $pi -lt $parsedPatterns.Count; $pi++) {
-            if ($parsedPatterns[$pi] -match '^\.\*' -and $parsedPatterns[$pi] -notmatch '^\*\.') {
-                $correctedPattern = $parsedPatterns[$pi] -replace '^\.\*', '*.'
-                Write-Log -Message "Auto-corrected pattern '$($parsedPatterns[$pi])' -> '$correctedPattern' (use glob syntax, e.g. '*.psm1' not '.*psm1')." -Level Warning
-                $parsedPatterns[$pi] = $correctedPattern
+        # Also auto-correct ExcludePatterns
+        for ($pi = 0; $pi -lt $parsedExcludes.Count; $pi++) {
+            $pat = $parsedExcludes[$pi]
+            if ([regex]::IsMatch($pat, '^\.\*') -and -not [regex]::IsMatch($pat, '^\*\.')) {
+                $correctedPattern = $pat -replace '^\.\*', '*.'
+                Write-Log -Message "Auto-corrected exclude pattern '$pat' -> '$correctedPattern' (use glob syntax, e.g. '*.psm1' not '.*psm1')." -Level Warning
+                $parsedExcludes[$pi] = $correctedPattern
+            }
+            elseif ([regex]::IsMatch($pat, '^\.[a-zA-Z0-9_-]+$')) {
+                $correctedPattern = "*" + $pat
+                Write-Log -Message "Auto-corrected exclude pattern '$pat' -> '$correctedPattern' (prepended * for glob matching)." -Level Warning
+                $parsedExcludes[$pi] = $correctedPattern
             }
         }
 
@@ -332,7 +372,7 @@ function Export-ProjectContext {
         }
 
         if ($filteredFiles.Count -eq 0) {
-            Write-Log -Message "No files matched pattern '$Pattern' under '$resolvedRoot'." -Level Warning
+            Write-Log -Message "No files matched pattern '$patternDisplay' under '$resolvedRoot'." -Level Warning
             return
         }
 
