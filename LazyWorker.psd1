@@ -20,7 +20,9 @@ NestedModules = @(
     'Module\Get-AllFontName.psm1',
     'Module\LinuxCmd\Get-OomKillerHistory.psm1',
     'Module\Export-ProjectContext.psm1',
-    'Module\New-AiProjectPattern.psm1'
+    'Module\New-AiProjectPattern.psm1',
+    'Module\Clear-ProjectTraces.psm1',
+    'Module\Get-LazySecret.psm1'
 )
 
 # Version number of this module.
@@ -46,7 +48,7 @@ PowerShellVersion = '7.4'
 
 # Functions to export from this module, for best performance, do not use wildcards and do not withdraw them from the list.
 FunctionsToExport = 
-@('Search-String', 'Stop-ProcessWithDll', 'Write-Log', 'Send-FileViaSSH', 'Get-AllFontName', 'Get-OomKillerHistory', 'Export-ProjectContext', 'New-AiProjectPattern')
+@('Search-String', 'Stop-ProcessWithDll', 'Write-Log', 'Send-FileViaSSH', 'Get-AllFontName', 'Get-OomKillerHistory', 'Export-ProjectContext', 'New-AiProjectPattern', 'Clear-ProjectTraces', 'Get-LazySecret', 'Set-LazySecret', 'Remove-LazySecret')
 
 # Cmdlets to export from this module
 CmdletsToExport = @()
