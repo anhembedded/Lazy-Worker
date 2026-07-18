@@ -41,8 +41,8 @@ function Export-ProjectContext {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true, Position = 0)]
-        [ValidateNotNullOrEmpty()]
-        [string]$Path,
+        [Alias('Paths')]
+        [string[]]$Path,
 
         [Parameter(Position = 1)]
         [ValidateNotNullOrEmpty()]
@@ -265,13 +265,24 @@ function Export-ProjectContext {
         }
 
         # ── Validate root path ───────────────────────────────────────────
-        if (-not (Test-Path -Path $Path -PathType Container)) {
-            $errMsg = "The path '$Path' does not exist or is not a directory."
+        # Support multiple input paths
+        $inputPaths = @($Path) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        if ($inputPaths.Count -eq 0) {
+            $errMsg = 'No valid paths provided to -Path.'
             Write-Log -Message $errMsg -Level Error
-            throw [System.IO.DirectoryNotFoundException]::new($errMsg)
+            throw [System.ArgumentException]::new($errMsg)
         }
 
-        $resolvedRoot = (Resolve-Path -Path $Path -ErrorAction Stop).Path
+        # Resolve and validate each root
+        $resolvedRoots = @()
+        foreach ($p in $inputPaths) {
+            if (-not (Test-Path -Path $p -PathType Container)) {
+                $errMsg = "The path '$p' does not exist or is not a directory."
+                Write-Log -Message $errMsg -Level Error
+                throw [System.IO.DirectoryNotFoundException]::new($errMsg)
+            }
+            $resolvedRoots += (Resolve-Path -Path $p -ErrorAction Stop).Path
+        }
 
         # ── Validate output directory exists ─────────────────────────────
         if ($hasOutputFile) {
@@ -326,138 +337,129 @@ function Export-ProjectContext {
             }
         }
 
-        # ── Collect files ────────────────────────────────────────────────
+        # ── Collect and process files for each resolved root ─────────────
         $patternDisplay = $parsedPatterns -join ', '
-        Write-Log -Message "Scanning '$resolvedRoot' for '$patternDisplay' files (Recurse=$Recurse)..." -Level Info
 
-        $allFiles = @()
-        foreach ($pat in $parsedPatterns) {
-            $gciParams = @{
-                Path        = $resolvedRoot
-                Filter      = $pat
-                File        = $true
-                ErrorAction = 'SilentlyContinue'
-            }
-            if ($Recurse) {
-                $gciParams.Recurse = $true
-            }
-            $allFiles += @(Get-ChildItem @gciParams)
-        }
-        # Remove duplicates (if patterns overlap)
-        $allFiles = @($allFiles | Sort-Object FullName -Unique)
 
-        # ── Filter out excluded directories ──────────────────────────────
-        $filteredFiles = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
-        foreach ($file in $allFiles) {
-            $skip = $false
-            $pathParts = $file.FullName.Substring($resolvedRoot.Length) -split '[/\\]'
-            foreach ($part in $pathParts) {
-                if ($excludedDirs -contains $part) {
-                    $skip = $true
-                    break
-                }
-            }
-            # Apply ExcludePattern filtering
-            if (-not $skip -and $parsedExcludes) {
-                foreach ($exPat in $parsedExcludes) {
-                    if ($file.Name -like $exPat) {
-                        $skip = $true
-                        break
-                    }
-                }
-            }
-            if (-not $skip) {
-                $filteredFiles.Add($file)
-            }
-        }
-
-        if ($filteredFiles.Count -eq 0) {
-            Write-Log -Message "No files matched pattern '$patternDisplay' under '$resolvedRoot'." -Level Warning
-            return
-        }
-
-        Write-Log -Message "Found $($filteredFiles.Count) file(s) after exclusions." -Level Info
-
-        # ── Build output ─────────────────────────────────────────────────
         $sb = [System.Text.StringBuilder]::new(1MB)
 
-        # METADATA: project tree
+        # METADATA: top-level header
         [void]$sb.AppendLine('# PROJECT CONTEXT')
         [void]$sb.AppendLine()
-        [void]$sb.AppendLine("**Root:** ``$resolvedRoot``")
+        [void]$sb.AppendLine("**Roots:**")
+        foreach ($r in $resolvedRoots) { [void]$sb.AppendLine("- ``$r``") }
+        [void]$sb.AppendLine()
         [void]$sb.AppendLine("**Pattern:** ``$patternDisplay``")
-        [void]$sb.AppendLine("**Files:** $($filteredFiles.Count)")
         [void]$sb.AppendLine("**Generated:** $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
         [void]$sb.AppendLine()
-        [void]$sb.AppendLine('## Directory Tree')
-        [void]$sb.AppendLine()
-        [void]$sb.AppendLine('```')
-        $treeString = Build-TreeString -RootPath $resolvedRoot -Files $filteredFiles
-        [void]$sb.AppendLine($treeString)
-        [void]$sb.AppendLine('```')
-        [void]$sb.AppendLine()
-        [void]$sb.AppendLine('---')
-        [void]$sb.AppendLine()
 
-        # ── Append each file ─────────────────────────────────────────────
         $processedCount = 0
         $skippedBinary  = 0
 
-        foreach ($file in ($filteredFiles | Sort-Object FullName)) {
-            $relativePath = $file.FullName.Substring($resolvedRoot.Length).TrimStart([IO.Path]::DirectorySeparatorChar, '/', '\')
+        foreach ($resolvedRoot in $resolvedRoots) {
+            Write-Log -Message "Scanning '$resolvedRoot' for '$patternDisplay' files (Recurse=$Recurse)..." -Level Info
 
-            # Skip binary files
-            if (Test-BinaryFile -FilePath $file.FullName) {
-                Write-Log -Message "Skipped binary file: $relativePath" -Level Debug
-                $skippedBinary++
+            $allFiles = @()
+            foreach ($pat in $parsedPatterns) {
+                $gciParams = @{
+                    Path        = $resolvedRoot
+                    Filter      = $pat
+                    File        = $true
+                    ErrorAction = 'SilentlyContinue'
+                }
+                if ($Recurse) { $gciParams.Recurse = $true }
+                $allFiles += @(Get-ChildItem @gciParams)
+            }
+            # Remove duplicates (if patterns overlap)
+            $allFiles = @($allFiles | Sort-Object FullName -Unique)
+
+            # ── Filter out excluded directories ─────────────────────────
+            $filteredFiles = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
+            foreach ($file in $allFiles) {
+                $skip = $false
+                $pathParts = $file.FullName.Substring($resolvedRoot.Length) -split '[/\\]'
+                foreach ($part in $pathParts) {
+                    if ($excludedDirs -contains $part) { $skip = $true; break }
+                }
+                # Apply ExcludePattern filtering
+                if (-not $skip -and $parsedExcludes) {
+                    foreach ($exPat in $parsedExcludes) {
+                        if ($file.Name -like $exPat) { $skip = $true; break }
+                    }
+                }
+                if (-not $skip) { $filteredFiles.Add($file) }
+            }
+
+            if ($filteredFiles.Count -eq 0) {
+                Write-Log -Message "No files matched pattern '$patternDisplay' under '$resolvedRoot'." -Level Warning
                 continue
             }
 
-            # Determine language tag for fenced code block
-            $ext = $file.Extension.ToLower()
-            $lang = if ($langMap.ContainsKey($ext)) { $langMap[$ext] } else { '' }
+            Write-Log -Message "Found $($filteredFiles.Count) file(s) after exclusions under '$resolvedRoot'." -Level Info
 
-            # Handle special filename-based detection (Dockerfile, Makefile, etc.)
-            if ([string]::IsNullOrEmpty($lang)) {
-                $baseName = $file.Name.ToLower()
-                if ($baseName -eq 'dockerfile')  { $lang = 'dockerfile' }
-                elseif ($baseName -eq 'makefile') { $lang = 'makefile' }
-                elseif ($baseName -eq 'jenkinsfile') { $lang = 'groovy' }
-            }
+            # Per-root tree
+            [void]$sb.AppendLine('## Directory Tree: ' + $resolvedRoot)
+            [void]$sb.AppendLine()
+            [void]$sb.AppendLine('```')
+            $treeString = Build-TreeString -RootPath $resolvedRoot -Files $filteredFiles
+            [void]$sb.AppendLine($treeString)
+            [void]$sb.AppendLine('```')
+            [void]$sb.AppendLine()
+            [void]$sb.AppendLine('---')
+            [void]$sb.AppendLine()
 
-            try {
-                $rawContent = [System.IO.File]::ReadAllText($file.FullName)
+            foreach ($file in ($filteredFiles | Sort-Object FullName)) {
+                $relativePath = $file.FullName.Substring($resolvedRoot.Length).TrimStart([IO.Path]::DirectorySeparatorChar, '/', '\')
 
-                # Strip comments for Python / C / C++ before compressing
-                $commentLangs = @('python', 'c', 'cpp')
-                if ($commentLangs -contains $lang) {
-                    $rawContent = Remove-Comments -Text $rawContent -Language $lang
+                # Skip binary files
+                if (Test-BinaryFile -FilePath $file.FullName) {
+                    Write-Log -Message "Skipped binary file: $relativePath" -Level Debug
+                    $skippedBinary++
+                    continue
                 }
 
-                $compressedContent = Compress-EmptyLines -Text $rawContent
+                # Determine language tag for fenced code block
+                $ext = $file.Extension.ToLower()
+                $lang = if ($langMap.ContainsKey($ext)) { $langMap[$ext] } else { '' }
 
-                # Markdown header + fenced code block
-                [void]$sb.AppendLine("# FILE: $relativePath")
-                [void]$sb.AppendLine()
-                [void]$sb.AppendLine("``````$lang")
-                [void]$sb.Append($compressedContent)
-                # Ensure content ends with newline before closing fence
-                if (-not $compressedContent.EndsWith([Environment]::NewLine) -and -not $compressedContent.EndsWith("`n")) {
+                # Handle special filename-based detection (Dockerfile, Makefile, etc.)
+                if ([string]::IsNullOrEmpty($lang)) {
+                    $baseName = $file.Name.ToLower()
+                    if ($baseName -eq 'dockerfile')  { $lang = 'dockerfile' }
+                    elseif ($baseName -eq 'makefile') { $lang = 'makefile' }
+                    elseif ($baseName -eq 'jenkinsfile') { $lang = 'groovy' }
+                }
+
+                try {
+                    $rawContent = [System.IO.File]::ReadAllText($file.FullName)
+
+                    # Strip comments for Python / C / C++ before compressing
+                    $commentLangs = @('python', 'c', 'cpp')
+                    if ($commentLangs -contains $lang) {
+                        $rawContent = Remove-Comments -Text $rawContent -Language $lang
+                    }
+
+                    $compressedContent = Compress-EmptyLines -Text $rawContent
+
+                    # Markdown header + fenced code block
+                    [void]$sb.AppendLine("# FILE: $relativePath")
                     [void]$sb.AppendLine()
-                }
-                [void]$sb.AppendLine('``````')
-                [void]$sb.AppendLine()
+                    [void]$sb.AppendLine("``````$lang")
+                    [void]$sb.Append($compressedContent)
+                    # Ensure content ends with newline before closing fence
+                    if (-not $compressedContent.EndsWith([Environment]::NewLine) -and -not $compressedContent.EndsWith("`n")) {
+                        [void]$sb.AppendLine()
+                    }
+                    [void]$sb.AppendLine('``````')
+                    [void]$sb.AppendLine()
 
-                $processedCount++
+                    $processedCount++
 
-                if ($PrintToTerminal) {
-                    Write-Host "  ✓ $relativePath" -ForegroundColor Green
+                    if ($PrintToTerminal) { Write-Host "  ✓ $relativePath" -ForegroundColor Green }
                 }
-            }
-            catch {
-                Write-Log -Message "Failed to read '$relativePath': $_" -Level Warning
-                if ($PrintToTerminal) {
-                    Write-Host "  ✗ $relativePath (read error)" -ForegroundColor Red
+                catch {
+                    Write-Log -Message "Failed to read '$relativePath': $_" -Level Warning
+                    if ($PrintToTerminal) { Write-Host "  ✗ $relativePath (read error)" -ForegroundColor Red }
                 }
             }
         }

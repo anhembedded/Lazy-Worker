@@ -29,13 +29,13 @@ ModuleVersion = '1.0.0'
 GUID = 'd2e2ad47-7988-466d-8ca1-44754714f3aa'
 
 # Author of this module
-Author = 'anh.embedded'
+Author = 'anh.embedded, Embedded Nathan'
 
 # Company or vendor of this module
 CompanyName = 'NON'
 
 # Copyright statement for this module
-Copyright = '(c) 2026 anh.embedded. All rights reserved.'
+Copyright = '(c) 2026 anh.embedded, Embedded Nathan. All rights reserved.'
 
 # Description of the functionality provided by this module
 Description = 'Lazy fucntion for automate'
