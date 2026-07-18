@@ -3,7 +3,8 @@
 ## Development Commands
 * **Install**: pip install -e .
 * **Build**: python -m build
-* **Lint**: uff check .
+* **Lint**: 
+uff check .
 * **Format**: lack .
 * **Package**: 
 * **Run**: pytest

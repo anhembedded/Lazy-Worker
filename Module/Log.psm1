@@ -83,13 +83,42 @@ function Write-Log {
             }
         }
 
-        # Print to console (always runs)
-        switch ($Level) {
-            'Error'   { Write-Host $logLine -ForegroundColor Red }
-            'Warning' { Write-Host $logLine -ForegroundColor Yellow }
-            'Debug'   { Write-Host $logLine -ForegroundColor DarkGray }
-            'Trace'   { Write-Host $logLine -ForegroundColor Cyan }
-            default   { Write-Host $logLine -ForegroundColor Gray }
+        # Print to console (always runs) with color formatting
+        # PS7+: ANSI escape codes | PS5.1: Write-Host -ForegroundColor
+        if ($PSVersionTable.PSVersion.Major -ge 7) {
+            $esc = [char]0x1b
+            $colorReset     = "$esc[0m"
+            $colorTimestamp = "$esc[90m"  # Dark Gray
+
+            $colorLevel = switch ($Level) {
+                'Error'   { "$esc[91m" }  # Bright Red
+                'Warning' { "$esc[93m" }  # Bright Yellow
+                'Debug'   { "$esc[90m" }  # Dark Gray
+                'Trace'   { "$esc[36m" }  # Cyan
+                'Info'    { "$esc[92m" }  # Bright Green
+                default   { "$esc[37m" }  # White
+            }
+            $colorMessage = "$esc[37m"  # White
+
+            $consoleLine = "${colorTimestamp}${timestamp}${colorReset} [${colorLevel}${paddedLevel}${colorReset}] ${colorMessage}${Message}${colorReset}"
+            Write-Host $consoleLine
+        }
+        else {
+            # PS5.1: dùng Write-Host -ForegroundColor vì không hỗ trợ ANSI
+            $fgLevel = switch ($Level) {
+                'Error'   { 'Red' }
+                'Warning' { 'Yellow' }
+                'Debug'   { 'DarkGray' }
+                'Trace'   { 'Cyan' }
+                'Info'    { 'Green' }
+                default   { 'White' }
+            }
+
+            Write-Host $timestamp -ForegroundColor DarkGray -NoNewline
+            Write-Host " [" -NoNewline
+            Write-Host $paddedLevel -ForegroundColor $fgLevel -NoNewline
+            Write-Host "] " -NoNewline
+            Write-Host $Message -ForegroundColor White
         }
     }
 }

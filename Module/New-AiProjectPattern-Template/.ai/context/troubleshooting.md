@@ -1,6 +1,3 @@
-# Troubleshooting & FAQ
+# Troubleshooting Guide
 
-* **Known Issues**:
-* **Common Errors**:
-* **FAQ**:
-* **Typical Mistakes**:
+Solutions to common build, run, or deployment issues.

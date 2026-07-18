@@ -1,6 +1,3 @@
-# Reference Examples
+# Usage Examples
 
-* **Common Usage**:
-* **Reference Examples**:
-* **Sample Projects**:
-* **Best Practices**:
+Example code, scripts, and implementation demos.

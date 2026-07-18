@@ -37,6 +37,8 @@ Never skip a step.
 
     skills/         Engineering workflows
 
+    tracking/       Complex task plans and status files
+
     prompts/        Optional prompt templates
 
 ---
@@ -81,9 +83,10 @@ Additionally apply:
 |------|-------|
 | Testing | testing.md |
 | Documentation | documentation.md |
-| Security | security.md |
-| Release | versioning.md |
-| Performance | performance.md |
+| Knowledge Base | knowledge-base.md |
+| Commit | commit-rule.md |
+| Deployment | deployment.md |
+| Complex Multi-Phase Task | task-tracking.md |
 
 Rules are mandatory.
 
@@ -97,16 +100,14 @@ Every task must use one primary engineering skill.
 
 | User Request | Primary Skill |
 |--------------|---------------|
-| Implement Feature | implement-feature.md |
 | Implement Module | implement-module.md |
 | Fix Bug | investigate-fix-bug.md |
 | Refactor | refactor.md |
-| Review Code | review-code.md |
 | Review PR | review-pr.md |
-| Improve Performance | optimize-performance.md |
-| Write Documentation | write-documentation.md |
-| Create Tests | improve-test-suite.md |
-| Design Architecture | architecture-design.md |
+| Review System | review_system.md |
+| Improve Performance | optimize.md |
+| Write Documentation | write-doc.md |
+| Design Architecture | architecture.md |
 
 If multiple skills are required:
 
